@@ -129,6 +129,26 @@ function RevealIcon({ children }: { children: React.ReactNode }) {
   );
 }
 
+function ProductImage({ product }: { product: Product }) {
+  const [broken, setBroken] = useState(false);
+  useEffect(() => setBroken(false), [product.barcode]);
+  if (product.image && !broken) {
+    return (
+      <img
+        className="pm-img"
+        src={product.image}
+        alt={`Photo of ${product.name}`}
+        referrerPolicy="no-referrer"
+        onError={() => setBroken(true)}
+      />
+    );
+  }
+  return (
+    <div className="pm-img pm-ph" aria-hidden="true">
+      {product.source === "photo" ? "📷" : "📦"}
+    </div>
+  );
+}
 function ScnLanding() {
   const [scanState, setScanState] = useState<ScanState>("idle");
   const [scannedCode, setScannedCode] = useState<string | null>(null);
@@ -265,6 +285,23 @@ function ScnLanding() {
   }
 
   useEffect(() => stopCamera, []);
+
+  const modalRef = useRef<HTMLDivElement>(null);
+  const modalOpen = scanState === "found" && !!product;
+  useEffect(() => {
+    if (!modalOpen) return;
+    const onKey = (e: KeyboardEvent) => e.key === "Escape" && !wizardOpen && tryAgain();
+    window.addEventListener("keydown", onKey);
+    document.body.style.overflow = "hidden";
+    return () => {
+      window.removeEventListener("keydown", onKey);
+      document.body.style.overflow = "";
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [modalOpen, wizardOpen]);
+  useEffect(() => {
+    modalRef.current?.scrollTo({ top: 0 });
+  }, [product?.barcode]);
 
   useEffect(() => {
     document.body.style.overflow = menuOpen ? "hidden" : "";
@@ -442,6 +479,15 @@ function ScnLanding() {
         .footer-bottom{display:flex; justify-content:space-between; flex-wrap:wrap; gap:16px; border-top:1px solid var(--hair); padding-top:24px; font-size:13px; color:var(--muted);}
         .footer-links{display:flex; gap:20px;}
         .footer-links a:hover{color:var(--ink);}
+
+        .pm{position:fixed;inset:0;z-index:250;background:rgba(18,20,15,.6);backdrop-filter:blur(6px);display:flex;align-items:center;justify-content:center;padding:20px;animation:pmfade .2s}
+        @keyframes pmfade{from{opacity:0}}
+        .pm-card{position:relative;width:100%;max-width:720px;max-height:92vh;overflow-y:auto;background:var(--paper);border-radius:8px;padding:28px;text-align:left;box-shadow:0 30px 80px -20px rgba(0,0,0,.5);animation:pop .35s cubic-bezier(.2,.8,.2,1)}
+        .pm-close{position:sticky;top:0;float:right;z-index:3;width:36px;height:36px;margin:-8px -8px 0 8px;border-radius:50%;border:1px solid var(--hair);background:var(--paper);font-size:22px;line-height:1;cursor:pointer;color:var(--ink)}
+        .pm-top{display:flex;gap:18px;align-items:center;margin-bottom:20px}.pm-top h3{font-family:'Archivo',sans-serif;font-size:22px;line-height:1.15;margin:0 0 6px}.pm-top .kicker{margin:0 0 6px}.pm-brand{font-size:13px;color:var(--muted);margin:0 0 10px}
+        .pm-img{width:112px;height:112px;flex-shrink:0;border:1px solid var(--hair);border-radius:6px;background:#fff;object-fit:contain}.pm-ph{display:flex;align-items:center;justify-content:center;font-size:44px;background:var(--bg)}
+        .thumb{width:34px;height:34px;object-fit:contain;border-radius:3px;background:#fff;border:1px solid var(--hair);flex-shrink:0}
+        @media (max-width:640px){.pm{padding:0;align-items:flex-end}.pm-card{max-height:94vh;border-radius:16px 16px 0 0;padding:20px 18px calc(24px + env(safe-area-inset-bottom,0px))}.pm-img{width:84px;height:84px}.pm-top h3{font-size:19px}}
 
         .ing-wrap{margin:4px 0 0}.ing-head{display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:6px}.ing-head .col-label{font-size:12px;color:var(--muted);font-weight:600;margin:0}
         .ing-tabs{display:flex;border:1px solid var(--hair);border-radius:3px;overflow:hidden}.ing-tabs button{font-size:12px;padding:6px 12px;background:var(--paper);border:0;cursor:pointer;color:var(--muted)}.ing-tabs button.on{background:var(--ink);color:var(--paper)}
@@ -867,49 +913,71 @@ function ScnLanding() {
             <SearchPanel onPick={openProduct} onError={showError} />
             <PhotoPanel onResult={openProduct} />
 
-            <div className={`result ${scanState === "found" && product ? "show" : ""}`}>
-              {product && (
-                <>
-                  <VerdictBanner
-                    profile={profile}
-                    product={product}
-                    onOpen={() => setWizardOpen(true)}
-                  />
-                  <div className="result-head">
-                    <h3>{product.name}</h3>
-                    <span className={`score ${product.scoreClass}`}>Score: {product.score}</span>
-                  </div>
-                  <IngredientList ingredients={product.ingredients} />
-                  <div className="result-grid">
-                    <div className="result-col">
-                      <p className="col-label">Allergens declared</p>
-                      <ul>
-                        {product.allergens.map((a) => (
-                          <li key={a.name}>
-                            <span>{a.name}</span>
-                            <span className={a.match ? "flag" : "ok"}>
-                              {a.match ? "Present" : "Clear"}
-                            </span>
-                          </li>
-                        ))}
-                      </ul>
-                    </div>
-                  </div>
-                  <SwapsPanel swaps={swaps} profile={profile} onPick={openProduct} />
-                  <ShareRow product={product} profile={profile} />
-                  <p className="disclaimer">
-                    {product.source === "photo"
-                      ? "Read from your photo — text recognition can make mistakes, so check against the label. Not medical or dietary advice."
-                      : product.source === "sample"
-                        ? "Sample data for demonstration — not medical or dietary advice."
-                        : "Live data from Open Food Facts — not medical or dietary advice."}
-                  </p>
-                  <button className="btn btn-ghost" style={{ marginTop: 20 }} onClick={tryAgain}>
-                    Scan another
+            {product && scanState === "found" && (
+              <div
+                className="pm"
+                role="dialog"
+                aria-modal="true"
+                aria-label={`${product.name} details`}
+                onClick={(e) => e.target === e.currentTarget && tryAgain()}
+              >
+                <div className="pm-card" ref={modalRef}>
+                  <button className="pm-close" onClick={tryAgain} aria-label="Close">
+                    ×
                   </button>
-                </>
-              )}
-            </div>
+                  <div className="result show">
+                    <div className="pm-top">
+                      <ProductImage product={product} />
+                      <div>
+                        <p className="kicker">Scan result</p>
+                        <h3>{product.name}</h3>
+                        {product.brand && <p className="pm-brand">{product.brand}</p>}
+                        <span className={`score ${product.scoreClass}`}>
+                          Score: {product.score}
+                        </span>
+                      </div>
+                    </div>
+                    <VerdictBanner
+                      profile={profile}
+                      product={product}
+                      onOpen={() => setWizardOpen(true)}
+                    />
+                    <IngredientList ingredients={product.ingredients} />
+                    <div className="result-grid">
+                      <div className="result-col">
+                        <p className="col-label">Allergens declared</p>
+                        <ul>
+                          {product.allergens.map((a) => (
+                            <li key={a.name}>
+                              <span>{a.name}</span>
+                              <span className={a.match ? "flag" : "ok"}>
+                                {a.match ? "Present" : "Clear"}
+                              </span>
+                            </li>
+                          ))}
+                        </ul>
+                      </div>
+                    </div>
+                    <SwapsPanel swaps={swaps} profile={profile} onPick={openProduct} />
+                    <ShareRow product={product} profile={profile} />
+                    <p className="disclaimer">
+                      {product.source === "photo"
+                        ? "Read from your photo — text recognition can make mistakes, so check against the label. Not medical or dietary advice."
+                        : product.source === "sample"
+                          ? "Sample data for demonstration — not medical or dietary advice."
+                          : "Live data from Open Food Facts — not medical or dietary advice."}
+                    </p>
+                    <button
+                      className="btn btn-primary"
+                      style={{ marginTop: 20 }}
+                      onClick={tryAgain}
+                    >
+                      Scan another
+                    </button>
+                  </div>
+                </div>
+              </div>
+            )}
 
             <HistoryPanel
               items={history}
