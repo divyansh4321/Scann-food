@@ -160,6 +160,7 @@ export function SwapsPanel({
       {swaps.map((p) => (
         <button key={p.barcode} className="swap" onClick={() => onPick(p)}>
           <i className={`lvl ${dot(profile, p)}`} />
+          {p.image && <img className="thumb" src={p.image} alt="" loading="lazy" />}
           <span>{p.name}</span>
           <span className="mono">Score {p.score}</span>
         </button>
@@ -190,6 +191,9 @@ export function HistoryPanel({
         {items.map((h) => (
           <button key={h.product.barcode} className="swap" onClick={() => onPick(h.product)}>
             <i className={`lvl ${dot(profile, h.product)}`} />
+            {h.product.image && (
+              <img className="thumb" src={h.product.image} alt="" loading="lazy" />
+            )}
             <span>{h.product.name}</span>
             <span className="mono">{h.product.score}</span>
           </button>
