@@ -13,6 +13,8 @@ export type Product = {
   nutrients?: Nutr | undefined;
   categories?: string[];
   source?: "off" | "sample" | "photo";
+  image?: string | undefined;
+  brand?: string | undefined;
 };
 export type Hit = { code: string; name: string; brand?: string; score: string };
 
@@ -59,7 +61,7 @@ export function splitIngredients(text: string): string[] {
 }
 
 const FIELDS =
-  "code,product_name,brands,nutriscore_grade,nutriments,allergens_tags,ingredients,ingredients_text,ingredients_text_en,categories_tags";
+  "code,product_name,brands,nutriscore_grade,nutriments,allergens_tags,ingredients,ingredients_text,ingredients_text_en,categories_tags,brands,image_front_url,image_front_small_url";
 
 export function parseProduct(p: any, barcode: string): Product {
   const { score, scoreClass } = scoreFromGrade(p.nutriscore_grade);
@@ -81,6 +83,8 @@ export function parseProduct(p: any, barcode: string): Product {
     score,
     scoreClass,
     source: "off",
+    image: p.image_front_url || p.image_front_small_url || undefined,
+    brand: p.brands?.split(",")[0]?.trim() || undefined,
     categories: p.categories_tags ?? [],
     nutrients: {
       su: p.nutriments?.sugars_100g,
@@ -148,3 +152,4 @@ export async function findSwaps(cur: Product, level: (p: Product) => number): Pr
     .sort((a, b) => level(a) - level(b) || gradeRank(a.score) - gradeRank(b.score))
     .slice(0, 3);
 }
+
