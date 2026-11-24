@@ -218,30 +218,38 @@ function ScnLanding() {
     setErrorMessage(null);
     setScanState("requesting");
     try {
+      if (!window.isSecureContext || !navigator.mediaDevices?.getUserMedia) {
+        throw Object.assign(new Error("insecure"), { name: "InsecureContext" });
+      }
       const reader = new BrowserMultiFormatReader();
       readerRef.current = reader;
-      const devices = await BrowserMultiFormatReader.listVideoInputDevices();
-      // Prefer the back/environment-facing camera on phones.
-      const backCamera =
-        devices.find((d) => /back|rear|environment/i.test(d.label)) ?? devices[devices.length - 1];
-
       setScanState("live");
-      await reader.decodeFromVideoDevice(
-        backCamera?.deviceId ?? null,
+      // Let React show the <video> before the stream attaches (needed on iPhones).
+      await new Promise((r) => requestAnimationFrame(() => r(null)));
+      // Ask for the back camera directly; this also works before the browser reveals device labels.
+      await reader.decodeFromConstraints(
+        { audio: false, video: { facingMode: { ideal: "environment" } } },
         videoRef.current!,
-        (result, err) => {
-          if (result) {
-            handleDecoded(result.getText());
-          } else if (err && !(err instanceof NotFoundException)) {
-            // NotFoundException just means "no barcode in this frame yet" — ignore it.
-          }
+        (result) => {
+          if (result) handleDecoded(result.getText());
+          // "No barcode in this frame yet" errors are expected and ignored.
         },
       );
     } catch (err) {
       console.error(err);
-      setErrorMessage(
-        "Couldn't access the back camera. Make sure you're on HTTPS and have granted camera permission.",
-      );
+      stopCamera();
+      const name = (err as { name?: string })?.name;
+      const msg =
+        name === "NotAllowedError" || name === "SecurityError"
+          ? "Camera permission was blocked. Tap the lock or camera icon in your browser’s address bar, allow Camera for this site, then try again."
+          : name === "NotFoundError" || name === "OverconstrainedError"
+            ? "No camera was found on this device. You can type a barcode or search by name instead."
+            : name === "NotReadableError" || name === "AbortError"
+              ? "The camera is busy. Close other apps or tabs using it, then try again."
+              : name === "InsecureContext"
+                ? "The camera needs a secure (https://) page. Open the site from its https:// address in Safari or Chrome."
+                : "Couldn’t start the camera. If you opened this link inside another app (Instagram, WhatsApp…), open it in Safari or Chrome instead.";
+      setErrorMessage(msg);
       setScanState("error");
     }
   }
@@ -809,6 +817,7 @@ function ScnLanding() {
                 className="scan-video"
                 style={{ display: scanState === "live" ? "block" : "none" }}
                 muted
+                autoPlay
                 playsInline
               />
               {scanState !== "live" && (
